@@ -28,7 +28,10 @@ Não depende da API do Meta nem de nenhuma biblioteca externa.
 ## O que ele faz por dentro
 
 - Rola a página para forçar o carregamento (lazy load) de todos os anúncios.
-- Coleta as imagens (`fbcdn`/`scontent`) e vídeos com URL `http`.
+- Coleta as imagens (`fbcdn`/`scontent`).
+- **Vídeos em alta resolução:** extrai a URL `video_hd_url` do JSON da própria página
+  (o player usa a SD/360p por padrão; a HD só aparece nesse JSON). Só usa a SD
+  (`video_sd_url`) como fallback quando não existe HD para aquele vídeo.
 - **Ignora repetidos** por dois filtros: caminho da URL (sem a assinatura `?...`)
   e conteúdo idêntico (hash CRC32 dos bytes).
 - Monta o ZIP na mão (método *store*, sem recompressão) para não depender de CDN
@@ -36,8 +39,9 @@ Não depende da API do Meta nem de nenhuma biblioteca externa.
 
 ## Limitações
 
+- Ele busca a versão HD no JSON da página. Se o Meta não expuser `video_hd_url`
+  para um vídeo, cai para a SD disponível.
 - **Vídeos `blob:`** não podem ser baixados por bookmarklet (restrição do navegador).
-  Ele pega os vídeos com URL real e ignora os `blob`, avisando quantos falharam.
 - A remoção de duplicados é por **bytes idênticos**. O mesmo criativo em
   **resoluções diferentes** conta como arquivos distintos.
 - Não faz upscale das imagens (mantém o tamanho original servido pelo Meta).

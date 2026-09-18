@@ -32,11 +32,50 @@
     }
   });
   const videos = new Set();
-  document.querySelectorAll("video").forEach(v => {
-    const src = v.currentSrc || v.src;
-    if (src && src.startsWith("http")) videos.add(src);
-    v.querySelectorAll("source").forEach(s => { if (s.src && s.src.startsWith("http")) videos.add(s.src); });
-  });
+
+  // ---- Videos em ALTA: extrai video_hd_url / video_sd_url do JSON da pagina ----
+  // O Ad Library serializa os anuncios em JSON dentro de <script>. O <video>
+  // que o player usa geralmente e a SD (360p); a HD so aparece nesse JSON.
+  // Estrategia: pega os HD; so cai pra SD quando nao existe HD pra aquele video.
+  const decodeJsonUrl = s => {
+    // desescapa \/ % etc. de dentro do JSON serializado
+    try { return JSON.parse('"' + s.replace(/"/g, '\\"') + '"'); }
+    catch (e) { return s.replace(/\\\//g, "/"); }
+  };
+  // Cada video tem um xpv_asset_id (no parametro efg, em base64) que e o MESMO
+  // na versao HD e na SD. Usamos ele pra parear: se ja peguei o HD daquele
+  // asset, ignoro o SD. Sem isso, quase todos os SD (360p) entravam junto.
+  const assetId = u => {
+    try {
+      const efg = new URL(u).searchParams.get("efg");
+      return String(JSON.parse(atob(decodeURIComponent(efg))).xpv_asset_id || "");
+    } catch (e) { return ""; }
+  };
+  const html = document.documentElement.innerHTML;
+  const hdIds = new Set();
+  for (const m of html.matchAll(/"video_hd_url":"(https[^"]+?)"/g)) {
+    const u = decodeJsonUrl(m[1]);
+    if (!u.startsWith("http")) continue;
+    videos.add(u);
+    const id = assetId(u); if (id) hdIds.add(id);
+  }
+  // SD como fallback: so adiciona os que NAO tem HD (mesmo xpv_asset_id)
+  for (const m of html.matchAll(/"video_sd_url":"(https[^"]+?)"/g)) {
+    const u = decodeJsonUrl(m[1]);
+    if (!u.startsWith("http")) continue;
+    const id = assetId(u);
+    if (id && hdIds.has(id)) continue;
+    videos.add(u);
+  }
+
+  // ---- Fallback final: <video> do DOM (caso o JSON nao tenha nada) ----
+  if (videos.size === 0) {
+    document.querySelectorAll("video").forEach(v => {
+      const src = v.currentSrc || v.src;
+      if (src && src.startsWith("http")) videos.add(src);
+      v.querySelectorAll("source").forEach(s => { if (s.src && s.src.startsWith("http")) videos.add(s.src); });
+    });
+  }
 
   const todas = [...urls, ...videos];
   if (todas.length === 0) { alert("Nenhuma midia encontrada. Role a pagina e tente de novo."); return; }
