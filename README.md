@@ -1,13 +1,24 @@
-# Baixador — Biblioteca de Anúncios (Meta)
+# Baixadores de mídia (Meta & Instagram)
 
-Bookmarklet (botão no navegador) que baixa **todas as mídias** de uma pesquisa na
-Biblioteca de Anúncios do Meta em **um único ZIP**, com **remoção de repetidos**.
-Não depende da API do Meta nem de nenhuma biblioteca externa.
+Dois bookmarklets (botões no navegador) que baixam mídias em **um único ZIP**, na
+**maior qualidade possível**, com **remoção de repetidos**. Não dependem de
+bibliotecas externas nem de APIs pagas.
 
 ## Arquivos
 
-- **`bookmarklet-source.js`** — código legível/comentado (para ler e editar).
-- **`bookmarklet.txt`** — a versão de uma linha (`javascript:...`) para colar num favorito.
+**Biblioteca de Anúncios do Meta:**
+- **`bookmarklet-source.js`** — código legível/comentado.
+- **`bookmarklet.txt`** — versão de uma linha (`javascript:...`) para colar num favorito.
+
+**Perfil do Instagram (posts + destaques):**
+- **`instagram-source.js`** — código legível/comentado.
+- **`instagram.txt`** — versão de uma linha (`javascript:...`) para colar num favorito.
+
+---
+
+# 1) Biblioteca de Anúncios (Meta)
+
+Baixa **todas as mídias** de uma pesquisa na Biblioteca de Anúncios do Meta.
 
 ## Como instalar (Chrome / Edge)
 
@@ -45,3 +56,44 @@ Não depende da API do Meta nem de nenhuma biblioteca externa.
 - A remoção de duplicados é por **bytes idênticos**. O mesmo criativo em
   **resoluções diferentes** conta como arquivos distintos.
 - Não faz upscale das imagens (mantém o tamanho original servido pelo Meta).
+
+---
+
+# 2) Perfil do Instagram (posts + destaques)
+
+Baixa **todas as fotos e vídeos** dos posts de um perfil **mais os destaques
+(highlights)**, sempre na **maior resolução** que o Instagram serve.
+
+## Como instalar
+
+Igual ao do Meta, mas usando o arquivo **`instagram.txt`**:
+- **Nome:** `Baixar Insta`
+- **URL:** conteúdo de `instagram.txt` (`Ctrl+A`, `Ctrl+C`, colar).
+
+## Como usar
+
+1. **Esteja logado** no Instagram (o bookmarklet usa a sua sessão).
+2. Abra a página do perfil que quer baixar (ex.: `instagram.com/usuario`).
+3. Clique no favorito. Se não estiver na página de um perfil, ele pergunta o `@`.
+4. Confirme e aguarde — ele baixa `instagram_<usuario>_<data>.zip`.
+
+Os arquivos são nomeados `usuario_post_NNN.ext` e `usuario_destaque_NNN.ext`.
+
+## O que ele faz por dentro
+
+- Descobre o **id do usuário** via API web (`/api/v1/users/web_profile_info/`).
+- Baixa **todos os posts** paginando o feed (`/api/v1/feed/user/`), incluindo
+  cada item dos **carrosséis**.
+- Baixa os **destaques** (`/highlights_tray/` + `/feed/reels_media/`).
+- Para cada mídia escolhe a **maior resolução** (`image_versions2` /
+  `video_versions`), ignora repetidos (caminho + hash CRC32) e monta o ZIP na mão.
+
+## Limitações
+
+- **Precisa estar logado.** Perfis **privados** só funcionam se você **seguir**.
+- Usa a API interna do Instagram — se eles mudarem os endpoints, pode parar de
+  funcionar (é a natureza de bookmarklet, sem API oficial).
+- Perfis muito grandes podem levar um tempo e, em excesso, esbarrar em **rate
+  limit** do Instagram (há pausas entre as chamadas pra reduzir isso).
+- **Stories atuais** (que não viraram destaque) não são baixados — só posts e
+  destaques.
