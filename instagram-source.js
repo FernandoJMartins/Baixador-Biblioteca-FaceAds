@@ -5,18 +5,24 @@
 (async () => {
   const APP_ID = "936619743392459";           // id do app web do Instagram
   const sleep = ms => new Promise(r => setTimeout(r, ms));
-  // Chama a API. Se tomar 429 (rate limit), espera e tenta de novo (backoff).
-  const api = async (url, tentativas = 4) => {
+  // Chama a API. Trata rate limit: 429, OU 200 devolvendo HTML (bloqueio
+  // disfarcado) -> espera e tenta de novo (backoff). So devolve se vier JSON.
+  const api = async (url, tentativas = 5) => {
     for (let t = 0; t < tentativas; t++) {
       const r = await fetch(url, {
         headers: { "x-ig-app-id": APP_ID, "x-requested-with": "XMLHttpRequest" },
         credentials: "include",
       });
-      if (r.status === 429) { await sleep((t + 1) * 6000); continue; }  // 6s, 12s, 18s...
+      if (r.status === 429) { await sleep((t + 1) * 8000); continue; }  // 8s,16s,24s...
+      const txt = await r.text();
+      let j;
+      try { j = JSON.parse(txt); }
+      catch (e) { await sleep((t + 1) * 8000); continue; }             // veio HTML = bloqueio
       if (!r.ok) throw new Error("HTTP " + r.status + " em " + url);
-      return r.json();
+      return j;
     }
-    throw new Error("429 (rate limit) em " + url + "\nO Instagram esta limitando. Espere uns minutos e tente de novo.");
+    throw new Error("O Instagram esta limitando as chamadas (429 ou resposta HTML) em:\n" + url +
+      "\n\nEspere bastante (30-60 min) sem ficar tentando, e rode de novo.");
   };
   // Tenta achar o id do usuario no HTML da propria pagina (evita chamada de API).
   const idDaPagina = (u) => {
@@ -84,7 +90,13 @@
   do {
     const url = `/api/v1/feed/user/${userId}/?count=33` + (maxId ? `&max_id=${maxId}` : "");
     let data;
-    try { data = await api(url); } catch (e) { console.warn("Falha na pagina de posts:", e); break; }
+    try {
+      data = await api(url);
+    } catch (e) {
+      if (pagina === 0) { alert("Nao consegui ler os posts.\n\n" + e.message); return; }
+      console.warn("Falha ao paginar posts (para aqui e usa o que ja tem):", e);
+      break;
+    }
     for (const it of (data.items || [])) {
       for (const u of urlsDeMidia(it)) { alvos.push({ url: u, tag: "post" }); totalPosts++; }
     }
