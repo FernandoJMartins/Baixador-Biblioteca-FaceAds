@@ -5,13 +5,29 @@
 (async () => {
   const APP_ID = "936619743392459";           // id do app web do Instagram
   const sleep = ms => new Promise(r => setTimeout(r, ms));
-  const api = async (url) => {
-    const r = await fetch(url, {
-      headers: { "x-ig-app-id": APP_ID, "x-requested-with": "XMLHttpRequest" },
-      credentials: "include",
-    });
-    if (!r.ok) throw new Error("HTTP " + r.status + " em " + url);
-    return r.json();
+  // Chama a API. Se tomar 429 (rate limit), espera e tenta de novo (backoff).
+  const api = async (url, tentativas = 4) => {
+    for (let t = 0; t < tentativas; t++) {
+      const r = await fetch(url, {
+        headers: { "x-ig-app-id": APP_ID, "x-requested-with": "XMLHttpRequest" },
+        credentials: "include",
+      });
+      if (r.status === 429) { await sleep((t + 1) * 6000); continue; }  // 6s, 12s, 18s...
+      if (!r.ok) throw new Error("HTTP " + r.status + " em " + url);
+      return r.json();
+    }
+    throw new Error("429 (rate limit) em " + url + "\nO Instagram esta limitando. Espere uns minutos e tente de novo.");
+  };
+  // Tenta achar o id do usuario no HTML da propria pagina (evita chamada de API).
+  const idDaPagina = (u) => {
+    const html = document.documentElement.innerHTML;
+    let m = html.match(/"profilePage_(\d+)"/);
+    if (m) return m[1];
+    const nome = u.replace(/[^A-Za-z0-9_.]/g, "");
+    m = html.match(new RegExp('"id":"(\\d+)","username":"' + nome + '"')) ||
+        html.match(new RegExp('"username":"' + nome + '"[^}]*?"id":"(\\d+)"')) ||
+        html.match(new RegExp('"pk":"?(\\d+)"?[^}]*?"username":"' + nome + '"'));
+    return m ? m[1] : "";
   };
 
   // ---- Descobre o @usuario (pela URL, ou pergunta) ----
@@ -22,18 +38,21 @@
   }
   if (!user) { alert("Perfil nao identificado. Abra a pagina do perfil e tente de novo."); return; }
 
-  // ---- Pega o id do usuario ----
-  let userId, priv, nomeCompleto;
-  try {
-    const info = await api(`/api/v1/users/web_profile_info/?username=${encodeURIComponent(user)}`);
-    const u = info.data.user;
-    userId = u.id; priv = u.is_private; nomeCompleto = u.full_name || user;
-    if (priv && !u.followed_by_viewer) {
-      if (!confirm(`@${user} e privado e voce nao segue. Provavelmente nao vai baixar nada.\nContinuar mesmo assim?`)) return;
+  // ---- Pega o id do usuario (1o da propria pagina, senao pela API) ----
+  let userId = idDaPagina(user);
+  if (!userId) {
+    try {
+      const info = await api(`/api/v1/users/web_profile_info/?username=${encodeURIComponent(user)}`);
+      const u = info.data.user;
+      userId = u.id;
+      if (u.is_private && !u.followed_by_viewer) {
+        if (!confirm(`@${user} e privado e voce nao segue. Provavelmente nao vai baixar nada.\nContinuar mesmo assim?`)) return;
+      }
+    } catch (e) {
+      alert("Nao consegui achar @" + user + ".\nVoce esta logado? O perfil existe?\n\n" + e.message +
+        "\n\nDica: abra a pagina do proprio perfil (instagram.com/" + user + ") antes de clicar. Se for 429, espere uns minutos.");
+      return;
     }
-  } catch (e) {
-    alert("Nao consegui achar @" + user + ".\nVoce esta logado? O perfil existe?\n\n" + e.message);
-    return;
   }
 
   // ---- Helpers: escolhe a MAIOR resolucao de cada midia ----
